@@ -242,6 +242,7 @@ function envoy_on_request(request_handle)
     return
   end
 
+  request_handle:headers():add("X-DataDome-status" , status)
   local request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
   local response_headers = parse_xdd_header(headers['x-datadome-headers'])
 
