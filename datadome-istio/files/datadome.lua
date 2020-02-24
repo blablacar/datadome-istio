@@ -1,8 +1,8 @@
-local options=...
-
 local DATADOME_API_KEY = options['API_KEY']
 
 local DATADOME_API_TIMEOUT = options['API_TIMEOUT'] or 100
+
+local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
 
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
@@ -24,8 +24,8 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
   '%.ttf$',
   '%.eot$',
   '%.mp4$',
-  '%.otf$'
-                                                                             }
+  '%.otf$',
+}
 
 local DATADOME_MODULE_NAME="Envoy"
 
@@ -33,7 +33,7 @@ local DATADOME_MODULE_VERSION="1.1"
 
 local DATADOME_REQUEST_PORT=0
 
--- some helpres
+-- some helpers
 local function urlencode(str)
   if str then
     str = string.gsub(str, '\n', '\r\n')
@@ -145,6 +145,23 @@ end
 function envoy_on_request(request_handle)
   local headers = request_handle:headers()
 
+  -- check if we need validation for this domain
+  local authority = headers:get(":authority")
+
+  local matched = false
+
+  for _, pattern in pairs(DATADOME_URL_PATTERNS) do
+    if string.match(authority, pattern) then
+      matched = true
+      break
+    end
+  end
+
+  if not matched then
+    return
+  end
+
+  -- check if we want to validate this specific URI
   local path = headers:get(":path")
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS_EXCLUSION) do
@@ -201,14 +218,16 @@ function envoy_on_request(request_handle)
   })
 
   local headers, body = request_handle:httpCall(
-    "datadome",
+    "outbound|443||api.datadome.co",
     {
       [":method"] = "POST",
       [":path"] = "/validate-request/",
-      [":authority"] = "datadome",
+      [":authority"] = "api.datadome.co",
+      ["user-agent"] = "DataDome",
       ["Content-Type"] = "application/x-www-form-urlencoded"
     },
-    body, DATADOME_API_TIMEOUT
+    body,
+    DATADOME_API_TIMEOUT
   )
 
   -- check that response is from our ApiServer

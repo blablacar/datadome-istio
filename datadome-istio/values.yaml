@@ -1,0 +1,15 @@
+# Default values for datadome-istio.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+datadome:
+  api_key: TOP_SECRET_API_KEY
+  api_url: api.datadome.co
+  api_timeout: 200 # in milliseconds
+  api_connection_timeout: "100ms" # go time format
+  url_patterns:
+  - '^www.blablacar.'
+  - '^edge.blablacar.com'
+  - '^http%-echo.staging%-1.blbl.cr'
+  uri_patterns:
+  uri_exclusion_patterns:

@@ -1,0 +1,21 @@
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: datadome-api
+  namespace: istio-system
+spec:
+  host: {{ .Values.datadome.api_url }}
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        connectionTimeout: {{ .Values.datadome.api_connection_timeout }}
+      http:
+        maxRetries: 1
+    portLevelSettings:
+    - port:
+        number: 443
+      tls:
+          mode: SIMPLE # initiates HTTPS when accessing api.datadome.co

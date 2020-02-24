@@ -1,0 +1,47 @@
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: datadome-api
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        portNumber: 80
+        filterChain:
+          filter:
+            name: "envoy.http_connection_manager"
+            subFilter:
+              name: "envoy.router"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.lua
+        config:
+          inlineCode: |
+            local options = {
+              API_TIMEOUT = {{ .Values.datadome.api_timeout}},
+              API_KEY = '{{ .Values.datadome.api_key }}',
+              URL_PATTERNS = {
+                {{ range .Values.datadome.url_patterns }}
+                  {{- . | quote -}},
+                {{ end -}}
+              },
+              URI_PATTERNS = {
+                {{ range .Values.datadome.uri_patterns }}
+                  {{- . | quote -}},
+                {{ end -}}
+              },
+              URI_PATTERNS_EXCLUSION = {
+                {{ range .Values.datadome.uri_patterns_exclusion }}
+                  {{- . | quote -}},
+                {{ end -}}
+              }
+            }
+            {{- tpl (.Files.Get "files/datadome.lua") . | nindent 12 }}
