@@ -83,8 +83,14 @@ local hostname = gethostname()
 
 local function getClientIP(request_handle)
   -- we can't get IP address here otherwise when X-Forwarder-For
-  ip = string.gsub(request_handle:headers():get("x-forwarded-for") or "", ",.*", "")
-  return ip
+  -- We take the 3rd ip from the end because GCLB adds 2
+  -- This should be fixed by allowing lua to access StreamInfo:: directly
+  ips = {};
+  xff = request_handle:headers():get("x-forwarded-for"):gsub("%s+", "")
+  for match in string.gmatch(xff..",", "(.-),") do
+    table.insert(ips, match);
+  end
+  return ips[#ips-2] or ips[1] or ""
 end
 
 local function getCurrentMicroTime()
