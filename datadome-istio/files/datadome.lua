@@ -29,7 +29,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.0"
+local DATADOME_MODULE_VERSION="1.1"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -153,7 +153,7 @@ function envoy_on_request(request_handle)
     end
   end
 
-  local matched = DATADOME_URI_PATTERNS == {}
+  local matched = next(DATADOME_URI_PATTERNS) == nil
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS) do
     if string.match(path, pattern) then
