@@ -81,11 +81,6 @@ end
 
 local hostname = gethostname()
 
-local function getClientIP(request_handle)
-  -- We can get the external IP via envoy and use the xff & proxy settings set globally
-  return request_handle:headers():get("x-envoy-external-address") or ""
-end
-
 local function getCurrentMicroTime()
   -- we need time up to microseccconds, but at lua we can do up to seconds :( round it
   return tostring(os.time()) .. "000000"
@@ -182,13 +177,14 @@ function envoy_on_request(request_handle)
     return
   end
 
+  local clientIP = headers:get("x-envoy-external-address") or ""
   local clientId, cookieLen = getClientIdAndCookiesLength(request_handle)
   local body = stringify({
       ["Key"]               = DATADOME_API_KEY,
       ["RequestModuleName"] = DATADOME_MODULE_NAME,
       ["ModuleVersion"]     = DATADOME_MODULE_VERSION,
       ["ServerName"]        = hostname,
-      ["IP"]                = getClientIP(request_handle),
+      ["IP"]                = clientIP,
       ["Port"]              = DATADOME_REQUEST_PORT,
       ["TimeRequest"]       = getCurrentMicroTime(),
       ["Protocol"]          = headers:get("x-forwarded-proto"),
