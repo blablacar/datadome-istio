@@ -225,15 +225,22 @@ function envoy_on_request(request_handle)
     DATADOME_API_TIMEOUT
   )
 
-  -- check that response is from our ApiServer
   local status = headers[':status']
+  -- For logging purposes
+  request_handle:headers():add("X-DataDome-status" , status)
+
+  -- check that response is from our ApiServer
   if not headers['x-datadomeresponse'] == status then
     return
   end
 
-  request_handle:headers():add("X-DataDome-status" , status)
   local request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
   local response_headers = parse_xdd_header(headers['x-datadome-headers'])
+
+  -- Unconditionally update the request headers for logging purposes
+  for request_header, _ in pairs(request_headers) do
+    request_handle:headers():replace(request_header, headers[request_header])
+  end
 
   if status == "403" or status == "401" or status == "301" or status == "302" then
     -- cleanup request headers
@@ -246,10 +253,6 @@ function envoy_on_request(request_handle)
   end
 
   if status == "200" then
-    -- update the request
-    for request_header, _ in pairs(request_headers) do
-      request_handle:headers():replace(request_header, headers[request_header])
-    end
     local dynamicMetadata = request_handle:streamInfo():dynamicMetadata()
     for response_header, _ in pairs(response_headers) do
       dynamicMetadata:set("datadome-response-headers", response_header, headers[response_header])
