@@ -2,6 +2,10 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+istio:
+  workloadSelector:
+    labels:
+      datadome: 'enabled'
 datadome:
   api_key: TOP_SECRET_API_KEY
   api_url: api.datadome.co

@@ -7,7 +7,9 @@ metadata:
 spec:
   workloadSelector:
     labels:
-      istio: ingressgateway
+      {{- range $key, $val := .Values.istio.workloadSelector.labels }}
+      {{ $key }}: {{ $val }}
+      {{- end }}
   configPatches:
   - applyTo: HTTP_FILTER
     match:
