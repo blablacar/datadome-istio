@@ -249,6 +249,12 @@ function envoy_on_request(request_handle)
         table.removekey(headers, request_header)
       end
     end
+    for key, value in pairs(headers) do
+      if key == "set-cookie" then
+        local fixed = string.gsub(value, "SameSite=Lax", "SameSite=None; Secure")
+        headers[key] = fixed
+      end
+    end
     request_handle:respond(headers, body)
   end
 
