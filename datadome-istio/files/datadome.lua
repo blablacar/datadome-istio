@@ -265,7 +265,8 @@ function envoy_on_response(response_handle)
   local datadomeResponseHeaders = dynamicMetadata:get("datadome-response-headers") or {}
   for key, value in pairs(datadomeResponseHeaders) do
     if key == "set-cookie" then
-      response_handle:headers():add(key, value)
+      local fixed = string.gsub(value, "SameSite=Lax", "SameSite=None; Secure")
+      response_handle:headers():add(key, fixed)
     else
       response_handle:headers():replace(key, value)
     end
