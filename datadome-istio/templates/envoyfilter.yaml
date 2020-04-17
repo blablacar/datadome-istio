@@ -35,15 +35,19 @@ spec:
                   {{- . | quote -}},
                 {{ end -}}
               },
+              {{- if .Values.datadome.uri_patterns -}}
               URI_PATTERNS = {
                 {{ range .Values.datadome.uri_patterns }}
                   {{- . | quote -}},
                 {{ end -}}
               },
+              {{ end }}
+              {{- if .Values.datadome.uri_patterns_exclusion -}}
               URI_PATTERNS_EXCLUSION = {
                 {{ range .Values.datadome.uri_patterns_exclusion }}
                   {{- . | quote -}},
                 {{ end -}}
               }
+              {{ end }}
             }
             {{- tpl (.Files.Get "files/datadome.lua") . | nindent 12 }}
