@@ -16,4 +16,3 @@ datadome:
   - '^edge.blablacar.com'
   - '^http%-echo.staging%-1.blbl.cr'
   uri_patterns:
-  uri_exclusion_patterns:
