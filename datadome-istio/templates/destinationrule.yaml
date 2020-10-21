@@ -11,7 +11,7 @@ spec:
       simple: ROUND_ROBIN
     connectionPool:
       tcp:
-        connectionTimeout: {{ .Values.datadome.api_connection_timeout }}
+        connectTimeout: {{ .Values.datadome.api_connection_timeout }}
       http:
         maxRetries: 1
     portLevelSettings:
