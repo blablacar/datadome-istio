@@ -25,7 +25,8 @@ spec:
       operation: INSERT_BEFORE
       value:
         name: envoy.lua
-        config:
+        typed_config:
+          "@type": type.googleapis.com/envoy.config.filter.http.lua.v2.Lua
           inlineCode: |
             local options = {
               API_TIMEOUT = {{ .Values.datadome.api_timeout}},
