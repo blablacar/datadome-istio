@@ -3,6 +3,7 @@
 # Declare variables to be passed into your templates.
 
 istio:
+  proxyVersion: ^1\.7.*
   workloadSelector:
     labels:
       datadome: 'enabled'

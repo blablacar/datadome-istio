@@ -22,7 +22,7 @@ spec:
             subFilter:
               name: "envoy.filters.http.router"
       proxy:
-        proxyVersion: ^1\.7.*
+        proxyVersion: {{ .Values.istio.proxyVersion }}
     patch:
       operation: INSERT_BEFORE
       value:
