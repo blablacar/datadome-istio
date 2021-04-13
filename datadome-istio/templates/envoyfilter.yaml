@@ -15,7 +15,7 @@ spec:
     match:
       context: GATEWAY
       listener:
-        portNumber: 80
+        portNumber: {{ .Values.istio.portNumber }}
         filterChain:
           filter:
             name: "envoy.filters.network.http_connection_manager"
