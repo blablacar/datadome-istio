@@ -21,6 +21,8 @@ spec:
             name: "envoy.filters.network.http_connection_manager"
             subFilter:
               name: "envoy.filters.http.router"
+      proxy:
+        proxyVersion: ^1\.7.*
     patch:
       operation: INSERT_BEFORE
       value:
