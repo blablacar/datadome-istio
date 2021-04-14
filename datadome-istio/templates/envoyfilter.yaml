@@ -2,7 +2,7 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: datadome-api
+  name: {{ .Release.Name }}
   namespace: istio-system
 spec:
   workloadSelector:

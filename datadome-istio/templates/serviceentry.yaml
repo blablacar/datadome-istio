@@ -1,8 +1,9 @@
+{{- if .Values.serviceEntry.enabled }}
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: ServiceEntry
 metadata:
-  name: datadome-api
+  name: {{ .Release.Name }}
   namespace: istio-system
 spec:
   hosts:
@@ -13,3 +14,4 @@ spec:
     number: 443
     protocol: HTTPS
   resolution: DNS
+{{- end }}

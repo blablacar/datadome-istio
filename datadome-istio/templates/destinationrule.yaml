@@ -1,8 +1,9 @@
+{{- if .Values.destinationRule.enabled }}
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: datadome-api
+  name: {{ .Release.Name }}
   namespace: istio-system
 spec:
   host: {{ .Values.datadome.api_url }}
@@ -19,3 +20,4 @@ spec:
         number: 443
       tls:
           mode: SIMPLE # initiates HTTPS when accessing api.datadome.co
+{{- end }}
