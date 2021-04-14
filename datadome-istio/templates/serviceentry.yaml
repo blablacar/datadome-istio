@@ -1,3 +1,4 @@
+{{- if .Values.createServiceEntry }}
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: ServiceEntry
@@ -13,3 +14,4 @@ spec:
     number: 443
     protocol: HTTPS
   resolution: DNS
+{{- end }}

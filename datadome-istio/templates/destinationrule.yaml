@@ -1,3 +1,4 @@
+{{- if .Values.createDestinationRule }}
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
@@ -19,3 +20,4 @@ spec:
         number: 443
       tls:
           mode: SIMPLE # initiates HTTPS when accessing api.datadome.co
+{{- end }}
