@@ -1,4 +1,4 @@
-{{- if .Values.createServiceEntry }}
+{{- if .Values.serviceEntry.enabled }}
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: ServiceEntry

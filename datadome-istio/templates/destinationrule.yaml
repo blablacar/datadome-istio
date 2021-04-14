@@ -1,4 +1,4 @@
-{{- if .Values.createDestinationRule }}
+{{- if .Values.destinationRule.enabled }}
 ---
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule

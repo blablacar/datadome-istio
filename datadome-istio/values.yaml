@@ -2,8 +2,11 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-createDestinationRule: true
-createServiceEntry: true
+destinationRule:
+  enabled: true
+
+serviceEntry:
+  enabled: true
 
 istio:
   portNumber: 8080
