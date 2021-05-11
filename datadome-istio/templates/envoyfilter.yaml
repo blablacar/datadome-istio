@@ -21,8 +21,10 @@ spec:
             name: "envoy.filters.network.http_connection_manager"
             subFilter:
               name: "envoy.filters.http.router"
+      {{- if .Values.istio.proxyVersion -}}
       proxy:
         proxyVersion: {{ .Values.istio.proxyVersion }}
+      {{- end -}}
     patch:
       operation: INSERT_BEFORE
       value:
