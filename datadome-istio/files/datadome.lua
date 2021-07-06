@@ -10,26 +10,44 @@ local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 -- rewrite standard regex into array of patterns
 -- /\.(js|css|jpg|jpeg|png|ico|gif|tiff|svg|woff|woff2|ttf|eot|mp4|otf)$
 local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
-  '%.js$',
-  '%.css$',
-  '%.jpg$',
-  '%.jpeg$',
-  '%.png$',
-  '%.ico$',
+  '%.avi$',
+  '%.flv$',
+  '%.mka$',
+  '%.mkv$',
+  '%.mov$',
+  '%.mp4$',
+  '%.mpeg$',
+  '%.mpg$',
+  '%.mp3$',
+  '%.flac$',
+  '%.ogg$',
+  '%.ogm$',
+  '%.opus$',
+  '%.wav$',
+  '%.webm$',
+  '%.webp$',
+  '%.bmp$',
   '%.gif$',
-  '%.tiff$',
+  '%.ico$',
+  '%.jpeg$',
+  '%.jpg$',
+  '%.png$',
   '%.svg$',
+  '%.svgz$',
+  '%.swf$',
+  '%.eot$',
+  '%.otf$',
+  '%.ttf$',
   '%.woff$',
   '%.woff2$',
-  '%.ttf$',
-  '%.eot$',
-  '%.mp4$',
-  '%.otf$',
+  '%.css$',
+  '%.less$',
+  '%.js$'
 }
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.1"
+local DATADOME_MODULE_VERSION="1.2"
 
 local DATADOME_REQUEST_PORT=0
 
