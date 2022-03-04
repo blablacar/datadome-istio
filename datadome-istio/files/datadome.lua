@@ -231,7 +231,7 @@ function envoy_on_request(request_handle)
   })
 
   local headers, body = request_handle:httpCall(
-    "outbound|443||api.datadome.co",
+    "outbound|443||{{ .Values.datadome.api_url }}",
     {
       [":method"] = "POST",
       [":path"] = "/validate-request/",
