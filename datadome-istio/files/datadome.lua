@@ -235,7 +235,7 @@ function envoy_on_request(request_handle)
     {
       [":method"] = "POST",
       [":path"] = "/validate-request/",
-      [":authority"] = "api.datadome.co",
+      [":authority"] = "{{ .Values.datadome.api_url }}",
       ["user-agent"] = "DataDome",
       ["Content-Type"] = "application/x-www-form-urlencoded"
     },
