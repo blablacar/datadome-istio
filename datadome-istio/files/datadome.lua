@@ -6,7 +6,7 @@ local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
 
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
--- LUA doesn't support regex with logical or, only simple pattern mattching
+-- LUA doesn't support regex with logical or, only simple pattern matching
 -- rewrite standard regex into array of patterns
 -- /\.(js|css|jpg|jpeg|png|ico|gif|tiff|svg|woff|woff2|ttf|eot|mp4|otf)$
 local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
