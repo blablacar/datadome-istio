@@ -153,6 +153,36 @@ local function parse_xdd_header(value)
   return t
 end
 
+-- @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
+local cacheable_directives = {
+	["max-age"] = true,
+	["s-maxage"] = true,
+	["public"] = true,
+}
+
+-- this returns whether the response can be cached
+-- according to its cache-control header value
+local function is_cacheable_response(response_handle)
+	local headers = response_handle:headers()
+
+	local cacheControlValue = headers:get("cache-control")
+
+	if not cacheControlValue then
+		return false
+	end
+
+	-- gmatch will split the string in order to extract each directive part
+	-- "public, max-age=604800, stale-if-error=86400" will become
+	-- public, max-age, 604800, stale-if-error, 86400
+	for directive in string.gmatch(cacheControlValue, "([^,=%s]+)=?") do
+		if cacheable_directives[directive] then
+			return true
+		end
+	end
+
+	return false
+end
+
 -- the module
 function envoy_on_request(request_handle)
   local headers = request_handle:headers()
@@ -279,6 +309,14 @@ function envoy_on_request(request_handle)
 end
 
 function envoy_on_response(response_handle)
+  -- if response is cacheable we don't want to add any datadome cookie
+	-- as they would prevent the response to be considered cacheable by CDN
+	-- downstream
+	-- @see https://cloud.google.com/cdn/docs/caching#non-cacheable_content
+	if is_cacheable_response(response_handle) then
+		return
+	end
+
   local dynamicMetadata = response_handle:streamInfo():dynamicMetadata()
   local datadomeResponseHeaders = dynamicMetadata:get("datadome-response-headers") or {}
   for key, value in pairs(datadomeResponseHeaders) do
