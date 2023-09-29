@@ -2,13 +2,11 @@ local DATADOME_API_KEY = options['API_KEY']
 
 local DATADOME_API_TIMEOUT = options['API_TIMEOUT'] or 100
 
-local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
-
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
--- LUA doesn't support regex with logical or, only simple pattern matching
+-- LUA doesn't support regex with logical or, only simple pattern mattching
 -- rewrite standard regex into array of patterns
--- /\.(js|css|jpg|jpeg|png|ico|gif|tiff|svg|woff|woff2|ttf|eot|mp4|otf)$
+-- /\.(avi|flv|mka|mkv|mov|mp4|mpeg|mpg|mp3|flac|ogg|ogm|opus|wav|webm|webp|bmp|gif|ico|jpeg|jpg|png|svg|svgz|swf|eot|otf|ttf|woff|woff2|css|less|js)$
 local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
   '%.avi$',
   '%.flv$',
@@ -47,7 +45,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.2"
+local DATADOME_MODULE_VERSION="1.3.0"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -98,6 +96,12 @@ function gethostname()
 end
 
 local hostname = gethostname()
+
+local function getClientIP(request_handle)
+  -- we can't get IP address here otherwise when X-Forwarded-For
+  ip = string.gsub(request_handle:headers():get("x-forwarded-for") or "", ",.*", "")
+  return ip
+end
 
 local function getCurrentMicroTime()
   -- we need time up to microseccconds, but at lua we can do up to seconds :( round it
@@ -187,24 +191,8 @@ end
 function envoy_on_request(request_handle)
   local headers = request_handle:headers()
 
-  -- check if we need validation for this domain
-  local authority = headers:get(":authority")
-
-  local matched = false
-
-  for _, pattern in pairs(DATADOME_URL_PATTERNS) do
-    if string.match(authority, pattern) then
-      matched = true
-      break
-    end
-  end
-
-  if not matched then
-    return
-  end
-
-  -- check if we want to validate this specific URI
-  local path = headers:get(":path")
+  local pathWithQuery = headers:get(":path")
+  local path = string.gsub(pathWithQuery, "?.*", "")
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS_EXCLUSION) do
     if string.match(path, pattern) then
@@ -225,22 +213,22 @@ function envoy_on_request(request_handle)
     return
   end
 
-  local clientIP = headers:get("x-envoy-external-address") or ""
   local clientId, cookieLen = getClientIdAndCookiesLength(request_handle)
-  local body = stringify({
+  local body = stringify(
+    truncateHeaders({
       ["Key"]               = DATADOME_API_KEY,
       ["RequestModuleName"] = DATADOME_MODULE_NAME,
       ["ModuleVersion"]     = DATADOME_MODULE_VERSION,
       ["ServerName"]        = hostname,
-      ["IP"]                = clientIP,
+      ["IP"]                = getClientIP(request_handle),
       ["Port"]              = DATADOME_REQUEST_PORT,
       ["TimeRequest"]       = getCurrentMicroTime(),
       ["Protocol"]          = headers:get("x-forwarded-proto"),
       ["Method"]            = headers:get(":method"),
-      ["ServerHostname"]    = authority,
-      ["Request"]           = path,
+      ["ServerHostname"]    = headers:get("host"),
+      ["Request"]           = pathWithQuery,
       ["HeadersList"]       = getHeadersList(request_handle),
-      ["Host"]              = authority,
+      ["Host"]              = headers:get("host"),
       ["UserAgent"]         = headers:get("User-Agent"),
       ["Referer"]           = headers:get("referer"),
       ["Accept"]            = headers:get("accept"),
@@ -248,7 +236,7 @@ function envoy_on_request(request_handle)
       ["AcceptLanguage"]    = headers:get("accept-language"),
       ["AcceptCharset"]     = headers:get("accept-charset"),
       ["Origin"]            = headers:get("origin"),
-      ["XForwaredForIP"]    = headers:get("x-forwarded-for"),
+      ["XForwardedForIP"]    = headers:get("x-forwarded-for"),
       ["X-Requested-With"]  = headers:get("x-requested-with"),
       ["Connection"]        = headers:get("connection"),
       ["Pragma"]            = headers:get("pragma"),
@@ -257,38 +245,39 @@ function envoy_on_request(request_handle)
       ["AuthorizationLen"]  = tostring(getAuthorizationLen(request_handle)),
       ["PostParamLen"]      = headers:get("content-length"),
       ["ClientID"]          = clientId,
-
-  })
+      ["SecCHUA"]           = headers:get("Sec-CH-UA"),
+      ["SecCHUAMobile"]     = headers:get("Sec-CH-UA-Mobile"),
+      ["SecCHUAPlatform"]   = headers:get("Sec-CH-UA-Platform"),
+      ["SecCHUAArch"]       = headers:get("Sec-CH-UA-Arch"),
+      ["SecCHUAFullVersionList"] = headers:get("Sec-CH-UA-Full-Version-List"),
+      ["SecCHUAModel"]      = headers:get("Sec-CH-UA-Model"),
+      ["SecCHDeviceMemory"] = headers:get("Sec-CH-Device-Memory"),
+      ["SecFetchDest"]      = headers:get("Sec-Fetch-Dest"),
+      ["SecFetchMode"]      = headers:get("Sec-Fetch-Mode"),
+      ["SecFetchSite"]      = headers:get("Sec-Fetch-Site"),
+      ["SecFetchUser"]      = headers:get("Sec-Fetch-User"),
+    })
+  )
 
   local headers, body = request_handle:httpCall(
-    "outbound|443||{{ .Values.datadome.api_url }}",
+    "datadome",
     {
       [":method"] = "POST",
       [":path"] = "/validate-request/",
-      [":authority"] = "{{ .Values.datadome.api_url }}",
-      ["user-agent"] = "DataDome",
+      [":authority"] = "datadome",
       ["Content-Type"] = "application/x-www-form-urlencoded"
     },
-    body,
-    DATADOME_API_TIMEOUT
+    body, DATADOME_API_TIMEOUT
   )
 
-  local status = headers[':status']
-  -- For logging purposes
-  request_handle:headers():add("X-DataDome-status" , status)
-
   -- check that response is from our ApiServer
+  local status = headers[':status']
   if not headers['x-datadomeresponse'] == status then
     return
   end
 
   local request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
   local response_headers = parse_xdd_header(headers['x-datadome-headers'])
-
-  -- Unconditionally update the request headers for logging purposes
-  for request_header, _ in pairs(request_headers) do
-    request_handle:headers():replace(request_header, headers[request_header])
-  end
 
   if status == "403" or status == "401" or status == "301" or status == "302" then
     -- cleanup request headers
@@ -301,6 +290,10 @@ function envoy_on_request(request_handle)
   end
 
   if status == "200" then
+    -- update the request
+    for request_header, _ in pairs(request_headers) do
+      request_handle:headers():replace(request_header, headers[request_header])
+    end
     local dynamicMetadata = request_handle:streamInfo():dynamicMetadata()
     for response_header, _ in pairs(response_headers) do
       dynamicMetadata:set("datadome-response-headers", response_header, headers[response_header])
@@ -328,3 +321,53 @@ function envoy_on_response(response_handle)
   end
 end
 
+-- Headers Truncation
+headersLength = {
+  ['SecCHUAMobile']           = 8,
+  ['SecCHDeviceMemory']       = 8,
+  ['SecFetchUser']            = 8,
+  ['SecCHUAArch']             = 16,
+  ['SecCHUAPlatform']         = 32,
+  ['SecFetchDest']            = 32,
+  ['SecFetchMode']            = 32,
+  ['SecFetchSite']            = 64,
+  ['ContentType']             = 64,
+  ['SecCHUA']                 = 128,
+  ['SecCHUAModel']            = 128,
+  ['AcceptCharset']           = 128,
+  ['AcceptEncoding']          = 128,
+  ['CacheControl']            = 128,
+  ['ClientID']                = 128,
+  ['Connection']              = 128,
+  ['Pragma']                  = 128,
+  ['X-Requested-With']        = 128,
+  ['From']                    = 128,
+  ['TrueClientIP']            = 128,
+  ['X-Real-IP']               = 128,
+  ['AcceptLanguage']          = 256,
+  ['SecCHUAFullVersionList']  = 256,
+  ['Via']                     = 256,
+  ['XForwardedForIP']         = -512,
+  ['Accept']                  = 512,
+  ['HeadersList']             = 512,
+  ['Host']                    = 512,
+  ['Origin']                  = 512,
+  ['ServerHostname']          = 512,
+  ['ServerName']              = 512,
+  ['UserAgent']               = 768,
+  ['Referer']                 = 1024,
+  ['Request']                 = 2048
+}
+-- Truncate Header methods
+function truncateHeaders(headers)
+  for k,v in pairs(headers) do
+    if headersLength[k] ~= nil then
+      if headersLength[k] > 0 then
+        headers[k] = string.sub(v, 1, headersLength[k])
+      else  -- backward truncation - String remains untouched if length is 0
+        headers[k] = string.sub(v, headersLength[k])
+      end
+    end
+  end
+  return headers
+end
