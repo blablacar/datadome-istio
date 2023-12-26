@@ -2,6 +2,8 @@ local DATADOME_API_KEY = options['API_KEY']
 
 local DATADOME_API_TIMEOUT = options['API_TIMEOUT'] or 100
 
+local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
+
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
 -- LUA doesn't support regex with logical or, only simple pattern mattching
@@ -191,6 +193,25 @@ end
 function envoy_on_request(request_handle)
   local headers = request_handle:headers()
 
+  -- check if we need validation for this domain
+  local authority = headers:get(":authority")
+
+  local matched = false
+
+  for _, pattern in pairs(DATADOME_URL_PATTERNS) do
+    if string.match(authority, pattern) then
+      matched = true
+      break
+    end
+  end
+
+  if not matched then
+    return
+  end
+  
+  -- check if we want to validate this specific URI
+  local path = headers:get(":path")
+
   local pathWithQuery = headers:get(":path")
   local path = string.gsub(pathWithQuery, "?.*", "")
 
@@ -213,6 +234,7 @@ function envoy_on_request(request_handle)
     return
   end
 
+  local clientIP = headers:get("x-envoy-external-address") or ""
   local clientId, cookieLen = getClientIdAndCookiesLength(request_handle)
   local body = stringify(
     truncateHeaders({
@@ -260,15 +282,21 @@ function envoy_on_request(request_handle)
   )
 
   local headers, body = request_handle:httpCall(
-    "datadome",
+    "outbound|443||{{ .Values.datadome.api_url }}",
     {
       [":method"] = "POST",
       [":path"] = "/validate-request/",
-      [":authority"] = "datadome",
+      [":authority"] = "{{ .Values.datadome.api_url }}",
+      ["user-agent"] = "DataDome",
       ["Content-Type"] = "application/x-www-form-urlencoded"
     },
-    body, DATADOME_API_TIMEOUT
+    body,
+    DATADOME_API_TIMEOUT
   )
+
+  local status = headers[':status']
+  -- For logging purposes
+  request_handle:headers():add("X-DataDome-status" , status)
 
   -- check that response is from our ApiServer
   local status = headers[':status']
@@ -278,6 +306,11 @@ function envoy_on_request(request_handle)
 
   local request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
   local response_headers = parse_xdd_header(headers['x-datadome-headers'])
+
+  -- Unconditionally update the request headers for logging purposes
+  for request_header, _ in pairs(request_headers) do
+    request_handle:headers():replace(request_header, headers[request_header])
+  end
 
   if status == "403" or status == "401" or status == "301" or status == "302" then
     -- cleanup request headers
