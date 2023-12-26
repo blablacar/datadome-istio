@@ -28,11 +28,12 @@ spec:
     patch:
       operation: INSERT_BEFORE
       value:
-        name: envoy.lua
+        name: {{ .Release.Name }}.lua
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
           inlineCode: |
             local options = {
+              FILTER_NAME = '{{ .Release.Name }}',
               API_TIMEOUT = {{ .Values.datadome.api_timeout}},
               API_KEY = '{{ .Values.datadome.api_key }}',
               URL_PATTERNS = {

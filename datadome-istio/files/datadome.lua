@@ -1,5 +1,7 @@
 local DATADOME_API_KEY = options['API_KEY']
 
+local DATADOME_FILTER_NAME = options['FILTER_NAME']
+
 local DATADOME_API_TIMEOUT = options['API_TIMEOUT'] or 100
 
 local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
@@ -326,7 +328,7 @@ function envoy_on_request(request_handle)
     end
     local dynamicMetadata = request_handle:streamInfo():dynamicMetadata()
     for response_header, _ in pairs(response_headers) do
-      dynamicMetadata:set("datadome-response-headers", response_header, headers[response_header])
+      dynamicMetadata:set(DATADOME_FILTER_NAME, response_header, headers[response_header])
     end
   end
 end
@@ -341,7 +343,7 @@ function envoy_on_response(response_handle)
 	end
 
   local dynamicMetadata = response_handle:streamInfo():dynamicMetadata()
-  local datadomeResponseHeaders = dynamicMetadata:get("datadome-response-headers") or {}
+  local datadomeResponseHeaders = dynamicMetadata:get(DATADOME_FILTER_NAME) or {}
   for key, value in pairs(datadomeResponseHeaders) do
     if key == "set-cookie" then
       response_handle:headers():add(key, value)
