@@ -6,7 +6,7 @@ local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
 
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
--- LUA doesn't support regex with logical or, only simple pattern mattching
+-- LUA doesn't support regex with logical or, only simple pattern matching
 -- rewrite standard regex into array of patterns
 -- /\.(avi|flv|mka|mkv|mov|mp4|mpeg|mpg|mp3|flac|ogg|ogm|opus|wav|webm|webp|bmp|gif|ico|jpeg|jpg|png|svg|svgz|swf|eot|otf|ttf|woff|woff2|css|less|js)$
 local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
@@ -208,10 +208,8 @@ function envoy_on_request(request_handle)
   if not matched then
     return
   end
-  
-  -- check if we want to validate this specific URI
-  local path = headers:get(":path")
 
+  -- check if we want to validate this specific URI
   local pathWithQuery = headers:get(":path")
   local path = string.gsub(pathWithQuery, "?.*", "")
 
