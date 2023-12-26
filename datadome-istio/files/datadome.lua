@@ -256,7 +256,7 @@ function envoy_on_request(request_handle)
       ["AcceptLanguage"]    = headers:get("accept-language"),
       ["AcceptCharset"]     = headers:get("accept-charset"),
       ["Origin"]            = headers:get("origin"),
-      ["XForwardedForIP"]    = headers:get("x-forwarded-for"),
+      ["XForwardedForIP"]   = headers:get("x-forwarded-for"),
       ["X-Requested-With"]  = headers:get("x-requested-with"),
       ["Connection"]        = headers:get("connection"),
       ["Pragma"]            = headers:get("pragma"),
@@ -268,14 +268,14 @@ function envoy_on_request(request_handle)
       ["SecCHUA"]           = headers:get("Sec-CH-UA"),
       ["SecCHUAMobile"]     = headers:get("Sec-CH-UA-Mobile"),
       ["SecCHUAPlatform"]   = headers:get("Sec-CH-UA-Platform"),
-      ["SecCHUAArch"]       = headers:get("Sec-CH-UA-Arch"),
+      ["SecCHUAArch"]            = headers:get("Sec-CH-UA-Arch"),
       ["SecCHUAFullVersionList"] = headers:get("Sec-CH-UA-Full-Version-List"),
-      ["SecCHUAModel"]      = headers:get("Sec-CH-UA-Model"),
-      ["SecCHDeviceMemory"] = headers:get("Sec-CH-Device-Memory"),
-      ["SecFetchDest"]      = headers:get("Sec-Fetch-Dest"),
-      ["SecFetchMode"]      = headers:get("Sec-Fetch-Mode"),
-      ["SecFetchSite"]      = headers:get("Sec-Fetch-Site"),
-      ["SecFetchUser"]      = headers:get("Sec-Fetch-User"),
+      ["SecCHUAModel"]           = headers:get("Sec-CH-UA-Model"),
+      ["SecCHDeviceMemory"]      = headers:get("Sec-CH-Device-Memory"),
+      ["SecFetchDest"]           = headers:get("Sec-Fetch-Dest"),
+      ["SecFetchMode"]           = headers:get("Sec-Fetch-Mode"),
+      ["SecFetchSite"]           = headers:get("Sec-Fetch-Site"),
+      ["SecFetchUser"]           = headers:get("Sec-Fetch-User"),
     })
   )
 
@@ -297,7 +297,6 @@ function envoy_on_request(request_handle)
   request_handle:headers():add("X-DataDome-status" , status)
 
   -- check that response is from our ApiServer
-  local status = headers[':status']
   if not headers['x-datadomeresponse'] == status then
     return
   end
