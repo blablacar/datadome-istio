@@ -49,7 +49,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.3.0"
+local DATADOME_MODULE_VERSION="1.3.1"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -257,6 +257,7 @@ function envoy_on_request(request_handle)
       ["AcceptEncoding"]         = headers:get("accept-encoding"),
       ["AcceptLanguage"]         = headers:get("accept-language"),
       ["AcceptCharset"]          = headers:get("accept-charset"),
+      ["ContentType"]            = headers:get("content-type"),
       ["Origin"]                 = headers:get("origin"),
       ["XForwardedForIP"]        = headers:get("x-forwarded-for"),
       ["X-Requested-With"]       = headers:get("x-requested-with"),
