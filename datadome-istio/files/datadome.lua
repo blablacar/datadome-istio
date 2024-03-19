@@ -49,9 +49,11 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.3.1"
+local DATADOME_MODULE_VERSION="1.3.2"
 
 local DATADOME_REQUEST_PORT=0
+
+local DATADOME_HEADERS_TO_REMOVE={"x-datadomeresponse", "x-datadome-headers", "x-datadome-request-headers"}
 
 -- some helpers
 local function urlencode(str)
@@ -236,7 +238,7 @@ function envoy_on_request(request_handle)
 
   local clientIP = headers:get("x-envoy-external-address") or ""
   local clientId, cookieLen = getClientIdAndCookiesLength(request_handle)
-  local body = stringify(
+  local datadome_payload_body = stringify(
     truncateHeaders({
       ["Key"]                    = DATADOME_API_KEY,
       ["RequestModuleName"]      = DATADOME_MODULE_NAME,
@@ -282,7 +284,7 @@ function envoy_on_request(request_handle)
     })
   )
 
-  local headers, body = request_handle:httpCall(
+  local headers, datadome_response_body = request_handle:httpCall(
     "outbound|443||{{ .Values.datadome.api_url }}",
     {
       [":method"] = "POST",
@@ -291,7 +293,7 @@ function envoy_on_request(request_handle)
       ["user-agent"] = "DataDome",
       ["Content-Type"] = "application/x-www-form-urlencoded"
     },
-    body,
+    datadome_payload_body,
     DATADOME_API_TIMEOUT
   )
 
@@ -304,8 +306,8 @@ function envoy_on_request(request_handle)
     return
   end
 
-  local request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
-  local response_headers = parse_xdd_header(headers['x-datadome-headers'])
+  local datadome_request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
+  local datadome_response_headers = parse_xdd_header(headers['x-datadome-headers'])
 
   -- Unconditionally update the request headers for logging purposes
   for request_header, _ in pairs(request_headers) do
@@ -313,22 +315,31 @@ function envoy_on_request(request_handle)
   end
 
   if status == "403" or status == "401" or status == "301" or status == "302" then
-    -- cleanup request headers
-    for request_header, _ in pairs(request_headers) do
-      if not response_headers[request_headers] then
+    -- Remove headers listed by datadome_request_headers and other DataDome headers that are not listed by datadome_response_headers.
+    -- This step is mandatory because we use the same request_handle to send a response to the client
+    -- and headers coming from the Protection API that are not listed by x-datadome-headers should not be visible from the client side.
+    for request_header, _ in pairs(datadome_request_headers) do
+      if not datadome_response_headers[request_header] then
         table.removekey(headers, request_header)
       end
     end
-    request_handle:respond(headers, body)
+
+    for _, header_to_remove in ipairs(DATADOME_HEADERS_TO_REMOVE) do
+      if headers[header_to_remove] then
+        table.removekey(headers, header_to_remove)
+      end
+    end
+
+    request_handle:respond(headers, datadome_response_body)
   end
 
   if status == "200" then
     -- update the request
-    for request_header, _ in pairs(request_headers) do
+    for request_header, _ in pairs(datadome_request_headers) do
       request_handle:headers():replace(request_header, headers[request_header])
     end
     local dynamicMetadata = request_handle:streamInfo():dynamicMetadata()
-    for response_header, _ in pairs(response_headers) do
+    for response_header, _ in pairs(datadome_response_headers) do
       dynamicMetadata:set(DATADOME_FILTER_NAME, response_header, headers[response_header])
     end
   end
