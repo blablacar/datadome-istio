@@ -310,7 +310,7 @@ function envoy_on_request(request_handle)
   local datadome_response_headers = parse_xdd_header(headers['x-datadome-headers'])
 
   -- Unconditionally update the request headers for logging purposes
-  for request_header, _ in pairs(request_headers) do
+  for request_header, _ in pairs(datadome_request_headers) do
     request_handle:headers():replace(request_header, headers[request_header])
   end
 
