@@ -49,7 +49,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.3.2"
+local DATADOME_MODULE_VERSION="1.3.3-a"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -281,6 +281,8 @@ function envoy_on_request(request_handle)
       ["SecFetchMode"]           = headers:get("Sec-Fetch-Mode"),
       ["SecFetchSite"]           = headers:get("Sec-Fetch-Site"),
       ["SecFetchUser"]           = headers:get("Sec-Fetch-User"),
+      ["TrueClientIP"]           = headers:get("x-envoy-external-address"),
+      ["X-Real-IP"]              = headers:get("x-envoy-internal"),
     })
   )
 
