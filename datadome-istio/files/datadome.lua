@@ -49,7 +49,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.3.2"
+local DATADOME_MODULE_VERSION="1.3.3"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -102,12 +102,6 @@ function gethostname()
 end
 
 local hostname = gethostname()
-
-local function getClientIP(request_handle)
-  -- we can't get IP address here otherwise when X-Forwarded-For
-  ip = string.gsub(request_handle:headers():get("x-forwarded-for") or "", ",.*", "")
-  return ip
-end
 
 local function getCurrentMicroTime()
   -- we need time up to microseccconds, but at lua we can do up to seconds :( round it
@@ -244,7 +238,7 @@ function envoy_on_request(request_handle)
       ["RequestModuleName"]      = DATADOME_MODULE_NAME,
       ["ModuleVersion"]          = DATADOME_MODULE_VERSION,
       ["ServerName"]             = hostname,
-      ["IP"]                     = getClientIP(request_handle),
+      ["IP"]                     = headers:get("x-envoy-external-address"),
       ["Port"]                   = DATADOME_REQUEST_PORT,
       ["TimeRequest"]            = getCurrentMicroTime(),
       ["Protocol"]               = headers:get("x-forwarded-proto"),
