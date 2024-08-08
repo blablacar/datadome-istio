@@ -4,6 +4,10 @@ kind: EnvoyFilter
 metadata:
   name: {{ .Release.Name }}
   namespace: istio-system
+  {{- if .Values.istio.resourceValidation.enabled }}
+  labels:
+      istio.io/tag: stable
+  {{- end }}
 spec:
   workloadSelector:
     labels:

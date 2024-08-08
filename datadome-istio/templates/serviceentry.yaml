@@ -5,6 +5,10 @@ kind: ServiceEntry
 metadata:
   name: {{ .Release.Name }}
   namespace: istio-system
+  {{- if .Values.istio.resourceValidation.enabled }}
+  labels:
+      istio.io/tag: stable
+  {{- end }}
 spec:
   hosts:
   - {{ .Values.datadome.api_url }}

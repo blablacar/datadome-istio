@@ -13,9 +13,12 @@ istio:
   workloadSelector:
     labels:
       datadome: "enabled"
+  resourceValidation:
+      enabled: false
 
 datadome:
   api_key: TOP_SECRET_API_KEY
   api_url: api.datadome.co
   api_timeout: 200 # in milliseconds
   api_connection_timeout: "100ms" # go time format
+
