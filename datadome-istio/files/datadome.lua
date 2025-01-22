@@ -165,27 +165,47 @@ local cacheable_directives = {
   ["max-age"] = true,
   ["s-maxage"] = true,
   ["public"] = true,
+  ["no-store"] = false,
+  ["private"] = false,
 }
 
--- this returns whether the response can be cached according to its cache-control header value (true if the response includes any cacheable directives)
+-- @see https://developer.mozilla.org/en-US/docs/Glossary/Cacheable
+local cacheable_status_codes = {"200", "203", "204", "206", "300", "301", "404", "405", "410", "414"}
+
+-- this returns whether the response can be cached according to the RFC 9111
 local function is_cacheable_response(response_handle)
-  local metadata = response_handle:streamInfo():dynamicMetadata():get(DATADOME_TENANT_NAME .. "cache_metadata", "cache-control")
+  local headers = response_handle:headers()
 
-  if not metadata then
-    return false
+  local cache_control_value = headers:get("cache-control")
+
+  if cache_control_value ~= nil then
+    local is_cacheable = false
+
+    -- gmatch will split the string to extract each directive part
+    -- "public, max-age=604800, stale-if-error=86400" will become
+    -- public, max-age, 604800, stale-if-error, 86400
+    for directive in string.gmatch(cache_control_value, "([^,=%s]+)=?") do
+      if cacheable_directives[directive] ~= nil then
+        if cacheable_directives[directive] == true then
+          is_cacheable = true
+        else
+          return false
+        end
+      end
+    end
+    return is_cacheable
   end
 
-  local cacheControlValue = metadata['cache-control']
+  local expires_header = headers:get("expires")
 
-  if not cacheControlValue then
-    return false
+  if expires_header ~= nil then
+    return true
   end
 
-  -- gmatch will split the string to extract each directive part
-  -- "public, max-age=604800, stale-if-error=86400" will become
-  -- public, max-age, 604800, stale-if-error, 86400
-  for directive in string.gmatch(cacheControlValue, "([^,=%s]+)=?") do
-    if cacheable_directives[directive] then
+  local status_code = headers:get(":status")
+
+  for i = 1, #cacheable_status_codes do
+    if cacheable_status_codes[i] == status_code then
       return true
     end
   end
@@ -327,11 +347,6 @@ function envoy_on_request(request_handle)
     local dynamicMetadata = request_handle:streamInfo():dynamicMetadata()
     for response_header, _ in pairs(datadome_response_headers) do
       dynamicMetadata:set(DATADOME_TENANT_NAME .. 'datadome-response-headers', response_header, headers[response_header])
-    end
-    -- store cache-control header
-    local cacheControlValue = request_handle:headers():get('cache-control')
-    if cacheControlValue then
-      dynamicMetadata:set(DATADOME_TENANT_NAME .. 'cache_metadata', 'cache-control', cacheControlValue)
     end
   end
 end
