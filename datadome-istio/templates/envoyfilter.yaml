@@ -37,14 +37,12 @@ spec:
           "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
           inlineCode: |
             local options = {
-              FILTER_NAME = '{{ .Release.Name }}',
-              API_TIMEOUT = {{ .Values.datadome.api_timeout}},
               API_KEY = '{{ .Values.datadome.api_key }}',
-              URL_PATTERNS = {
-                {{ range .Values.datadome.url_patterns }}
-                  {{- . | quote -}},
-                {{ end -}}
-              },
+              API_TIMEOUT = {{ .Values.datadome.api_timeout}},
+              DATADOME_CLUSTER_NAME = 'outbound|443||{{ .Values.datadome.api_url }}',
+              DATADOME_ENDPOINT = '{{ .Values.datadome.api_url }}',
+              DATADOME_TENANT_NAME = '{{ .Release.Name }}',
+              ENABLE_UNPROTECTED_CACHED_RESPONSE = true,
               {{- if .Values.datadome.uri_patterns -}}
               URI_PATTERNS = {
                 {{ range .Values.datadome.uri_patterns }}

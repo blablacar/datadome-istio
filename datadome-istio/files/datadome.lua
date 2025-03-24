@@ -1,10 +1,15 @@
-local DATADOME_API_KEY = options['API_KEY']
 
-local DATADOME_FILTER_NAME = options['FILTER_NAME']
+local DATADOME_API_KEY = options['API_KEY']
 
 local DATADOME_API_TIMEOUT = options['API_TIMEOUT'] or 100
 
-local DATADOME_URL_PATTERNS = options['URL_PATTERNS'] or {}
+local DATADOME_CLUSTER_NAME = options['DATADOME_CLUSTER_NAME'] or 'datadome'
+
+local DATADOME_ENABLE_UNPROTECTED_CACHED_RESPONSE = options['ENABLE_UNPROTECTED_CACHED_RESPONSE'] or false
+
+local DATADOME_ENDPOINT = options['DATADOME_ENDPOINT'] or 'api.datadome.co'
+
+local DATADOME_TENANT_NAME = options['DATADOME_TENANT_NAME'] or 'default'
 
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
@@ -49,7 +54,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="1.3.3"
+local DATADOME_MODULE_VERSION="2.1.0"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -103,11 +108,6 @@ end
 
 local hostname = gethostname()
 
-local function getCurrentMicroTime()
-  -- we need time up to microseccconds, but at lua we can do up to seconds :( round it
-  return tostring(os.time()) .. "000000"
-end
-
 local function getHeadersList(request_handle)
   local headers = ""
   for key, value in pairs(request_handle:headers()) do
@@ -124,8 +124,11 @@ end
 local function getClientIdAndCookiesLength(request_handle)
   local cookie = request_handle:headers():get("cookie") or ""
   local len = string.len(cookie)
-  local clientId = nil
-  if len > 0 then
+  local clientId = request_handle:headers():get("x-datadome-clientid")
+  local is_client_id_from_header = false
+  if clientId ~= nil then
+    is_client_id_from_header = true
+  elseif len > 0 then
     for k, v in string.gmatch(cookie, "([^;= ]+)=([^;$]+)") do
       if k == "datadome" then
         clientId = v
@@ -133,7 +136,7 @@ local function getClientIdAndCookiesLength(request_handle)
       end
     end
   end
-  return clientId, len
+  return clientId, len, is_client_id_from_header
 end
 
 local function getAuthorizationLen(request_handle)
@@ -159,60 +162,68 @@ end
 
 -- @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control
 local cacheable_directives = {
-	["max-age"] = true,
-	["s-maxage"] = true,
-	["public"] = true,
+  ["max-age"] = true,
+  ["s-maxage"] = true,
+  ["public"] = true,
+  ["no-store"] = false,
+  ["private"] = false,
 }
 
--- this returns whether the response can be cached
--- according to its cache-control header value
+-- @see https://developer.mozilla.org/en-US/docs/Glossary/Cacheable
+local cacheable_status_codes = {"200", "203", "204", "206", "300", "301", "404", "405", "410", "414"}
+
+-- this returns whether the response can be cached according to the RFC 9111
 local function is_cacheable_response(response_handle)
-	local headers = response_handle:headers()
+  local headers = response_handle:headers()
 
-	local cacheControlValue = headers:get("cache-control")
+  local cache_control_value = headers:get("cache-control")
 
-	if not cacheControlValue then
-		return false
-	end
+  if cache_control_value ~= nil then
+    local is_cacheable = false
 
-	-- gmatch will split the string in order to extract each directive part
-	-- "public, max-age=604800, stale-if-error=86400" will become
-	-- public, max-age, 604800, stale-if-error, 86400
-	for directive in string.gmatch(cacheControlValue, "([^,=%s]+)=?") do
-		if cacheable_directives[directive] then
-			return true
-		end
-	end
+    -- gmatch will split the string to extract each directive part
+    -- "public, max-age=604800, stale-if-error=86400" will become
+    -- public, max-age, 604800, stale-if-error, 86400
+    for directive in string.gmatch(cache_control_value, "([^,=%s]+)=?") do
+      if cacheable_directives[directive] ~= nil then
+        if cacheable_directives[directive] == true then
+          is_cacheable = true
+        else
+          return false
+        end
+      end
+    end
+    return is_cacheable
+  end
 
-	return false
+  local expires_header = headers:get("expires")
+
+  if expires_header ~= nil then
+    return true
+  end
+
+  local status_code = headers:get(":status")
+
+  for i = 1, #cacheable_status_codes do
+    if cacheable_status_codes[i] == status_code then
+      return true
+    end
+  end
+
+  return false
 end
 
 -- the module
 function envoy_on_request(request_handle)
   local headers = request_handle:headers()
 
-  -- check if we need validation for this domain
-  local authority = headers:get(":authority")
-
-  local matched = false
-
-  for _, pattern in pairs(DATADOME_URL_PATTERNS) do
-    if string.match(authority, pattern) then
-      matched = true
-      break
-    end
-  end
-
-  if not matched then
-    return
-  end
-
-  -- check if we want to validate this specific URI
+  local host = headers:get(":authority")
   local pathWithQuery = headers:get(":path")
   local path = string.gsub(pathWithQuery, "?.*", "")
+  local hostWithPath = host .. path
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS_EXCLUSION) do
-    if string.match(path, pattern) then
+    if string.match(hostWithPath, pattern) then
       return
     end
   end
@@ -220,7 +231,7 @@ function envoy_on_request(request_handle)
   local matched = next(DATADOME_URI_PATTERNS) == nil
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS) do
-    if string.match(path, pattern) then
+    if string.match(hostWithPath, pattern) then
       matched = true
       break
     end
@@ -230,80 +241,84 @@ function envoy_on_request(request_handle)
     return
   end
 
-  local clientIP = headers:get("x-envoy-external-address") or ""
-  local clientId, cookieLen = getClientIdAndCookiesLength(request_handle)
+  local clientId, cookieLen, is_client_id_from_header = getClientIdAndCookiesLength(request_handle)
   local datadome_payload_body = stringify(
     truncateHeaders({
-      ["Key"]                    = DATADOME_API_KEY,
-      ["RequestModuleName"]      = DATADOME_MODULE_NAME,
-      ["ModuleVersion"]          = DATADOME_MODULE_VERSION,
-      ["ServerName"]             = hostname,
-      ["IP"]                     = headers:get("x-envoy-external-address"),
-      ["Port"]                   = DATADOME_REQUEST_PORT,
-      ["TimeRequest"]            = getCurrentMicroTime(),
-      ["Protocol"]               = headers:get("x-forwarded-proto"),
-      ["Method"]                 = headers:get(":method"),
-      ["ServerHostname"]         = headers:get("host"),
-      ["Request"]                = pathWithQuery,
-      ["HeadersList"]            = getHeadersList(request_handle),
-      ["Host"]                   = headers:get("host"),
-      ["UserAgent"]              = headers:get("User-Agent"),
-      ["Referer"]                = headers:get("referer"),
-      ["Accept"]                 = headers:get("accept"),
-      ["AcceptEncoding"]         = headers:get("accept-encoding"),
-      ["AcceptLanguage"]         = headers:get("accept-language"),
-      ["AcceptCharset"]          = headers:get("accept-charset"),
-      ["ContentType"]            = headers:get("content-type"),
-      ["Origin"]                 = headers:get("origin"),
-      ["XForwardedForIP"]        = headers:get("x-forwarded-for"),
-      ["X-Requested-With"]       = headers:get("x-requested-with"),
-      ["Connection"]             = headers:get("connection"),
-      ["Pragma"]                 = headers:get("pragma"),
-      ["CacheControl"]           = headers:get("cache-control"),
-      ["CookiesLen"]             = tostring(cookieLen),
-      ["AuthorizationLen"]       = tostring(getAuthorizationLen(request_handle)),
-      ["PostParamLen"]           = headers:get("content-length"),
-      ["ClientID"]               = clientId,
-      ["SecCHUA"]                = headers:get("Sec-CH-UA"),
-      ["SecCHUAMobile"]          = headers:get("Sec-CH-UA-Mobile"),
-      ["SecCHUAPlatform"]        = headers:get("Sec-CH-UA-Platform"),
-      ["SecCHUAArch"]            = headers:get("Sec-CH-UA-Arch"),
+      ["Key"]               = DATADOME_API_KEY,
+      ["IP"]                = headers:get("x-envoy-external-address"),
+      ["RequestModuleName"] = DATADOME_MODULE_NAME,
+      ["ModuleVersion"]     = DATADOME_MODULE_VERSION,
+      ["ServerName"]        = hostname,
+      ["Port"]              = DATADOME_REQUEST_PORT,
+      ["TimeRequest"]       = request_handle:timestampString(EnvoyTimestampResolution.MICROSECOND),
+      ["Protocol"]          = headers:get("x-forwarded-proto"),
+      ["Method"]            = headers:get(":method"),
+      ["ServerHostname"]    = headers:get("host"),
+      ["Request"]           = pathWithQuery,
+      ["HeadersList"]       = getHeadersList(request_handle),
+      ["Host"]              = headers:get("host"),
+      ["From"]              = headers:get("from"),
+      ["UserAgent"]         = headers:get("User-Agent"),
+      ["Referer"]           = headers:get("referer"),
+      ["Accept"]            = headers:get("accept"),
+      ["AcceptEncoding"]    = headers:get("accept-encoding"),
+      ["AcceptLanguage"]    = headers:get("accept-language"),
+      ["AcceptCharset"]     = headers:get("accept-charset"),
+      ["ContentType"]       = headers:get("content-type"),
+      ["Origin"]            = headers:get("origin"),
+      ["XForwardedForIP"]   = headers:get("x-forwarded-for"),
+      ["X-Requested-With"]  = headers:get("x-requested-with"),
+      ["Connection"]        = headers:get("connection"),
+      ["Pragma"]            = headers:get("pragma"),
+      ["CacheControl"]      = headers:get("cache-control"),
+      ["CookiesLen"]        = tostring(cookieLen),
+      ["AuthorizationLen"]  = tostring(getAuthorizationLen(request_handle)),
+      ["PostParamLen"]      = headers:get("content-length"),
+      ["ClientID"]          = clientId,
+      ["Via"]               = headers:get("via"),
+      ["SecCHUA"]           = headers:get("Sec-CH-UA"),
+      ["SecCHUAMobile"]     = headers:get("Sec-CH-UA-Mobile"),
+      ["SecCHUAPlatform"]   = headers:get("Sec-CH-UA-Platform"),
+      ["SecCHUAArch"]       = headers:get("Sec-CH-UA-Arch"),
       ["SecCHUAFullVersionList"] = headers:get("Sec-CH-UA-Full-Version-List"),
-      ["SecCHUAModel"]           = headers:get("Sec-CH-UA-Model"),
-      ["SecCHDeviceMemory"]      = headers:get("Sec-CH-Device-Memory"),
-      ["SecFetchDest"]           = headers:get("Sec-Fetch-Dest"),
-      ["SecFetchMode"]           = headers:get("Sec-Fetch-Mode"),
-      ["SecFetchSite"]           = headers:get("Sec-Fetch-Site"),
-      ["SecFetchUser"]           = headers:get("Sec-Fetch-User"),
+      ["SecCHUAModel"]      = headers:get("Sec-CH-UA-Model"),
+      ["SecCHDeviceMemory"] = headers:get("Sec-CH-Device-Memory"),
+      ["SecFetchDest"]      = headers:get("Sec-Fetch-Dest"),
+      ["SecFetchMode"]      = headers:get("Sec-Fetch-Mode"),
+      ["SecFetchSite"]      = headers:get("Sec-Fetch-Site"),
+      ["SecFetchUser"]      = headers:get("Sec-Fetch-User"),
     })
   )
 
+  local request_header = {
+    [":method"] = "POST",
+    [":path"] = "/validate-request/",
+    [":authority"] = DATADOME_ENDPOINT,
+    ["Content-Type"] = "application/x-www-form-urlencoded",
+    ["Connection"] = "keep-alive"
+  }
+  if is_client_id_from_header == true then
+    request_header["X-DataDome-X-Set-Cookie"] = "true"
+  end
   local headers, datadome_response_body = request_handle:httpCall(
-    "outbound|443||{{ .Values.datadome.api_url }}",
-    {
-      [":method"] = "POST",
-      [":path"] = "/validate-request/",
-      [":authority"] = "{{ .Values.datadome.api_url }}",
-      ["user-agent"] = "DataDome",
-      ["Content-Type"] = "application/x-www-form-urlencoded"
-    },
-    datadome_payload_body,
-    DATADOME_API_TIMEOUT
+    DATADOME_CLUSTER_NAME,
+    request_header,
+    datadome_payload_body, DATADOME_API_TIMEOUT
   )
 
+  -- Add HTTP status code of DataDome API to the request headers
   local status = headers[':status']
-  -- For logging purposes
   request_handle:headers():add("X-DataDome-status" , status)
 
   -- check that response is from our ApiServer
-  if not headers['x-datadomeresponse'] == status then
+  if headers['x-datadomeresponse'] ~= status then
     return
   end
 
   local datadome_request_headers = parse_xdd_header(headers['x-datadome-request-headers'])
   local datadome_response_headers = parse_xdd_header(headers['x-datadome-headers'])
 
-  -- Unconditionally update the request headers for logging purposes
+  -- Add enriched headers to the request headers
   for request_header, _ in pairs(datadome_request_headers) do
     request_handle:headers():replace(request_header, headers[request_header])
   end
@@ -312,9 +327,9 @@ function envoy_on_request(request_handle)
     -- Remove headers listed by datadome_request_headers and other DataDome headers that are not listed by datadome_response_headers.
     -- This step is mandatory because we use the same request_handle to send a response to the client
     -- and headers coming from the Protection API that are not listed by x-datadome-headers should not be visible from the client side.
-    for request_header, _ in pairs(datadome_request_headers) do
-      if not datadome_response_headers[request_header] then
-        table.removekey(headers, request_header)
+    for datadome_request_header, _ in pairs(datadome_request_headers) do
+      if not datadome_response_headers[datadome_request_header] then
+        table.removekey(headers, datadome_request_header)
       end
     end
 
@@ -329,27 +344,20 @@ function envoy_on_request(request_handle)
 
   if status == "200" then
     -- update the request
-    for request_header, _ in pairs(datadome_request_headers) do
-      request_handle:headers():replace(request_header, headers[request_header])
-    end
     local dynamicMetadata = request_handle:streamInfo():dynamicMetadata()
     for response_header, _ in pairs(datadome_response_headers) do
-      dynamicMetadata:set(DATADOME_FILTER_NAME, response_header, headers[response_header])
+      dynamicMetadata:set(DATADOME_TENANT_NAME .. 'datadome-response-headers', response_header, headers[response_header])
     end
   end
 end
 
 function envoy_on_response(response_handle)
-  -- if response is cacheable we don't want to add any datadome cookie
-	-- as they would prevent the response to be considered cacheable by CDN
-	-- downstream
-	-- @see https://cloud.google.com/cdn/docs/caching#non-cacheable_content
-	if is_cacheable_response(response_handle) then
-		return
-	end
+  if DATADOME_ENABLE_UNPROTECTED_CACHED_RESPONSE == true and is_cacheable_response(response_handle) then
+    return
+  end
 
   local dynamicMetadata = response_handle:streamInfo():dynamicMetadata()
-  local datadomeResponseHeaders = dynamicMetadata:get(DATADOME_FILTER_NAME) or {}
+  local datadomeResponseHeaders = dynamicMetadata:get(DATADOME_TENANT_NAME .. 'datadome-response-headers') or {}
   for key, value in pairs(datadomeResponseHeaders) do
     if key == "set-cookie" then
       response_handle:headers():add(key, value)
