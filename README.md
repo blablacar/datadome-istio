@@ -41,9 +41,8 @@ datadome.api_key|Datadome API key|TOP_SECRET_API_KEY
 datadome.api_url|Datadome API url|api.datadome.co
 datadome.api_timeout| Timeout to Datadome API in milliseconds| 200
 datadome.api_connection_timeout| Connection timeout to Datadome API in milliseconds (golang time format) | "100ms"
-datadome.url_patterns|List of all URL patterns (domain + path) redirected to Datadome|
-datadome.uri_patterns_exclusions |List of all URI patterns (path) NOT redirected to Datadome|
-datadome.uri_patterns|List of all URI patterns (path) redirected to Datadome|
+datadome.uri_patterns_exclusions |List of all URI patterns (domain + path) NOT redirected to Datadome|
+datadome.uri_patterns|List of all URI patterns (domain + path) redirected to Datadome|
 
 # Filter
 
@@ -96,11 +95,9 @@ spec:
       api_url: api.datadome.co
       api_timeout: 200
       api_connection_timeout: "1s"
-      url_patterns:
-        - "^api%.my-domain%.com"
       uri_patterns_exclusion:
         - "%.avi$"
         - "%.flv$"
       uri_patterns:
-        - "^/api/route1
+        - "^api%.my-domain%.com/api/route1
 ```
