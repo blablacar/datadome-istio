@@ -43,7 +43,7 @@ spec:
               DATADOME_ENDPOINT = '{{ .Values.datadome.api_url }}',
               DATADOME_TENANT_NAME = '{{ .Release.Name }}',
               ENABLE_UNPROTECTED_CACHED_RESPONSE = true,
-              DATADOME_REMOVE_MATRIX_PARAMS =  {{ .Values.datadome.remove_matrix_params }},
+              REMOVE_MATRIX_PARAMS =  {{ .Values.datadome.remove_matrix_params }},
               {{- if .Values.datadome.uri_patterns -}}
               URI_PATTERNS = {
                 {{ range .Values.datadome.uri_patterns }}
