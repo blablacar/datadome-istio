@@ -21,4 +21,5 @@ datadome:
   api_url: api.datadome.co
   api_timeout: 200 # in milliseconds
   api_connection_timeout: "100ms" # go time format
+  remove_matrix_params: true
 

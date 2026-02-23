@@ -14,6 +14,8 @@ local DATADOME_TENANT_NAME = options['DATADOME_TENANT_NAME'] or 'default'
 
 local DATADOME_URI_PATTERNS = options['URI_PATTERNS'] or {}
 
+local DATADOME_REMOVE_MATRIX_PARAMS = options['REMOVE_MATRIX_PARAMS'] or false
+
 -- LUA doesn't support regex with logical or, only simple pattern matching
 -- rewrite standard regex into array of patterns
 -- /\.(avi|flv|mka|mkv|mov|mp4|mpeg|mpg|mp3|flac|ogg|ogm|opus|wav|webm|webp|bmp|gif|ico|jpeg|jpg|png|svg|svgz|swf|eot|otf|ttf|woff|woff2|css|less|js)$
@@ -55,7 +57,7 @@ local DATADOME_URI_PATTERNS_EXCLUSION = options['URI_PATTERNS_EXCLUSION'] or {
 
 local DATADOME_MODULE_NAME="Envoy"
 
-local DATADOME_MODULE_VERSION="2.1.0"
+local DATADOME_MODULE_VERSION="2.2.1"
 
 local DATADOME_REQUEST_PORT=0
 
@@ -219,12 +221,19 @@ function envoy_on_request(request_handle)
   local headers = request_handle:headers()
 
   local host = headers:get(":authority")
-  local pathWithQuery = headers:get(":path")
-  local path = string.gsub(pathWithQuery, "?.*", "")
-  local hostWithPath = host .. path
+  local full_path = headers:get(":path")
+  -- 1. Remove query params
+  local path_no_query = string.gsub(full_path, "?.*", "")
+  -- 2. Remove matrix params from every segment: matches ";" and all subsequent chars until it hits "/" or EOL
+  local path_normalized = path_no_query
+
+  if DATADOME_REMOVE_MATRIX_PARAMS == true then
+    path_normalized = string.gsub(path_no_query, ";[^/]*", "")
+  end
+  local host_with_normalized_path = host .. path_normalized
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS_EXCLUSION) do
-    if string.match(hostWithPath, pattern) then
+    if string.match(host_with_normalized_path, pattern) then
       return
     end
   end
@@ -232,7 +241,7 @@ function envoy_on_request(request_handle)
   local matched = next(DATADOME_URI_PATTERNS) == nil
 
   for _, pattern in pairs(DATADOME_URI_PATTERNS) do
-    if string.match(hostWithPath, pattern) then
+    if string.match(host_with_normalized_path, pattern) then
       matched = true
       break
     end
@@ -245,49 +254,52 @@ function envoy_on_request(request_handle)
   local clientId, cookieLen, is_client_id_from_header = getClientIdAndCookiesLength(request_handle)
   local datadome_payload_body = stringify(
     truncateHeaders({
-      ["Key"]               = DATADOME_API_KEY,
-      ["IP"]                = headers:get("x-envoy-external-address"),
-      ["RequestModuleName"] = DATADOME_MODULE_NAME,
-      ["ModuleVersion"]     = DATADOME_MODULE_VERSION,
-      ["ServerName"]        = hostname,
-      ["Port"]              = DATADOME_REQUEST_PORT,
-      ["TimeRequest"]       = request_handle:timestampString(EnvoyTimestampResolution.MICROSECOND),
-      ["Protocol"]          = headers:get("x-forwarded-proto"),
-      ["Method"]            = headers:get(":method"),
-      ["ServerHostname"]    = headers:get("host"),
-      ["Request"]           = pathWithQuery,
-      ["HeadersList"]       = getHeadersList(request_handle),
-      ["Host"]              = headers:get("host"),
-      ["From"]              = headers:get("from"),
-      ["UserAgent"]         = headers:get("User-Agent"),
-      ["Referer"]           = headers:get("referer"),
-      ["Accept"]            = headers:get("accept"),
-      ["AcceptEncoding"]    = headers:get("accept-encoding"),
-      ["AcceptLanguage"]    = headers:get("accept-language"),
-      ["AcceptCharset"]     = headers:get("accept-charset"),
-      ["ContentType"]       = headers:get("content-type"),
-      ["Origin"]            = headers:get("origin"),
-      ["XForwardedForIP"]   = headers:get("x-forwarded-for"),
-      ["X-Requested-With"]  = headers:get("x-requested-with"),
-      ["Connection"]        = headers:get("connection"),
-      ["Pragma"]            = headers:get("pragma"),
-      ["CacheControl"]      = headers:get("cache-control"),
-      ["CookiesLen"]        = tostring(cookieLen),
-      ["AuthorizationLen"]  = tostring(getAuthorizationLen(request_handle)),
-      ["PostParamLen"]      = headers:get("content-length"),
-      ["ClientID"]          = clientId,
-      ["Via"]               = headers:get("via"),
-      ["SecCHUA"]           = headers:get("Sec-CH-UA"),
-      ["SecCHUAMobile"]     = headers:get("Sec-CH-UA-Mobile"),
-      ["SecCHUAPlatform"]   = headers:get("Sec-CH-UA-Platform"),
-      ["SecCHUAArch"]       = headers:get("Sec-CH-UA-Arch"),
-      ["SecCHUAFullVersionList"] = headers:get("Sec-CH-UA-Full-Version-List"),
-      ["SecCHUAModel"]      = headers:get("Sec-CH-UA-Model"),
-      ["SecCHDeviceMemory"] = headers:get("Sec-CH-Device-Memory"),
-      ["SecFetchDest"]      = headers:get("Sec-Fetch-Dest"),
-      ["SecFetchMode"]      = headers:get("Sec-Fetch-Mode"),
-      ["SecFetchSite"]      = headers:get("Sec-Fetch-Site"),
-      ["SecFetchUser"]      = headers:get("Sec-Fetch-User"),
+      ["Key"]                    = DATADOME_API_KEY,
+      ["IP"]                     = headers:get("x-envoy-external-address"),
+      ["RequestModuleName"]      = DATADOME_MODULE_NAME,
+      ["ModuleVersion"]          = DATADOME_MODULE_VERSION,
+      ["ServerName"]             = hostname,
+      ["Port"]                   = DATADOME_REQUEST_PORT,
+      ["TimeRequest"]            = request_handle:timestampString(EnvoyTimestampResolution.MICROSECOND),
+      ["Protocol"]               = headers:get("x-forwarded-proto"),
+      ["Method"]                 = headers:get(":method"),
+      ["ServerHostname"]         = headers:get("host"),
+      ["Request"]                = full_path,
+      ["HeadersList"]            = getHeadersList(request_handle),
+      ["Host"]                   = headers:get("host"),
+      ["From"]                   = headers:get("from"),
+      ["UserAgent"]              = headers:get("user-agent"),
+      ["Referer"]                = headers:get("referer"),
+      ["Accept"]                 = headers:get("accept"),
+      ["AcceptEncoding"]         = headers:get("accept-encoding"),
+      ["AcceptLanguage"]         = headers:get("accept-language"),
+      ["AcceptCharset"]          = headers:get("accept-charset"),
+      ["ContentType"]            = headers:get("content-type"),
+      ["Origin"]                 = headers:get("origin"),
+      ["XForwardedForIP"]        = headers:get("x-forwarded-for"),
+      ["X-Requested-With"]       = headers:get("x-requested-with"),
+      ["Connection"]             = headers:get("connection"),
+      ["Pragma"]                 = headers:get("pragma"),
+      ["CacheControl"]           = headers:get("cache-control"),
+      ["CookiesLen"]             = tostring(cookieLen),
+      ["AuthorizationLen"]       = tostring(getAuthorizationLen(request_handle)),
+      ["PostParamLen"]           = headers:get("content-length"),
+      ["ClientID"]               = clientId,
+      ["Via"]                    = headers:get("via"),
+      ["SecCHUA"]                = headers:get("sec-ch-ua"),
+      ["SecCHUAMobile"]          = headers:get("sec-ch-ua-mobile"),
+      ["SecCHUAPlatform"]        = headers:get("sec-ch-ua-platform"),
+      ["SecCHUAArch"]            = headers:get("sec-ch-ua-arch"),
+      ["SecCHUAFullVersionList"] = headers:get("sec-ch-ua-full-version-list"),
+      ["SecCHUAModel"]           = headers:get("sec-ch-ua-model"),
+      ["SecCHDeviceMemory"]      = headers:get("sec-ch-device-memory"),
+      ["SecFetchDest"]           = headers:get("sec-fetch-dest"),
+      ["SecFetchMode"]           = headers:get("sec-fetch-mode"),
+      ["SecFetchSite"]           = headers:get("sec-fetch-site"),
+      ["SecFetchUser"]           = headers:get("sec-fetch-user"),
+      ["Signature"]              = headers:get("signature"),
+      ["SignatureAgent"]         = headers:get("signature-agent"),
+      ["SignatureInput"]         = headers:get("signature-input"),
     })
   )
 
@@ -401,9 +413,12 @@ headersLength = {
   ['Origin']                  = 512,
   ['ServerHostname']          = 512,
   ['ServerName']              = 512,
+  ['Signature']               = 512,
+  ['SignatureAgent']          = 512,
   ['UserAgent']               = 768,
   ['Referer']                 = 1024,
-  ['Request']                 = 2048
+  ['Request']                 = 2048,
+  ['SignatureInput']          = 2048
 }
 -- Truncate Header methods
 function truncateHeaders(headers)
